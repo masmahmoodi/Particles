@@ -13,8 +13,10 @@ Engine::Engine()
                     sf::Style::Close);
     m_Window.setVerticalSyncEnabled(true);
 
-   
     srand(static_cast<unsigned int>(time(nullptr)));
+
+    m_bgPhase = 0.0f;
+    m_bgColor = sf::Color::Black;
 }
 
 void Engine::run()
@@ -23,7 +25,6 @@ void Engine::run()
 
     cout << "Starting Particle unit tests..." << endl;
 
-    
     Particle p(m_Window, 4,
                { static_cast<int>(m_Window.getSize().x) / 2,
                  static_cast<int>(m_Window.getSize().y) / 2 });
@@ -58,16 +59,27 @@ void Engine::input()
             event.key.code == Keyboard::Escape)
             m_Window.close();
 
-        if (event.type == Event::MouseButtonPressed &&
-            event.mouseButton.button == Mouse::Left)
+        if (event.type == Event::MouseButtonPressed)
         {
             Vector2i mousePos(event.mouseButton.x, event.mouseButton.y);
 
-           
-            for (int i = 0; i < 5; ++i)
+            if (event.mouseButton.button == Mouse::Left)
             {
-                int numPoints = 25 + rand() % 26; 
-                m_particles.emplace_back(m_Window, numPoints, mousePos);
+               
+                for (int i = 0; i < 5; ++i)
+                {
+                    int numPoints = 25 + rand() % 26;
+                    m_particles.emplace_back(m_Window, numPoints, mousePos);
+                }
+            }
+            else if (event.mouseButton.button == Mouse::Right)
+            {
+                
+                for (int i = 0; i < 25; ++i)
+                {
+                    int numPoints = 30 + rand() % 21; 
+                    m_particles.emplace_back(m_Window, numPoints, mousePos);
+                }
             }
         }
     }
@@ -75,6 +87,13 @@ void Engine::input()
 
 void Engine::update(float dtAsSeconds)
 {
+   
+    m_bgPhase += dtAsSeconds * 0.5f;
+    float t = (std::sin(m_bgPhase) + 1.0f) * 0.5f;   
+    sf::Uint8 blue = static_cast<sf::Uint8>(20 + 80 * t);
+    sf::Uint8 red  = static_cast<sf::Uint8>(10 + 40 * (1.0f - t));
+    m_bgColor = sf::Color(red, 0, blue);
+
     auto it = m_particles.begin();
     while (it != m_particles.end())
     {
@@ -92,7 +111,7 @@ void Engine::update(float dtAsSeconds)
 
 void Engine::draw()
 {
-    m_Window.clear();
+    m_Window.clear(m_bgColor);
 
     for (auto& p : m_particles)
         m_Window.draw(p);
