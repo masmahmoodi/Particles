@@ -17,47 +17,37 @@ Particle::Particle(RenderTarget& target,
       m_color2(Color::Red),
       m_A(2, numPoints)
 {
-    
     Vector2u winSize = target.getSize();
     m_cartesianPlane.setCenter(0.f, 0.f);
-   
     m_cartesianPlane.setSize(static_cast<float>(winSize.x),
                              -static_cast<float>(winSize.y));
 
-   
     m_centerCoordinate =
         target.mapPixelToCoords(mouseClickPosition, m_cartesianPlane);
 
-   
-    double sign   = (rand() % 2 == 0) ? -1.0 : 1.0;
-    double mag    = 0.5 + (rand() / (double)RAND_MAX) * 1.5; // 0.5–2.0
-    m_radiansPerSec = static_cast<float>(sign * mag);
+    float frac = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+    m_radiansPerSec = frac * static_cast<float>(M_PI);
 
-   
-    float base = 200.f + static_cast<float>(rand() % 301); // 200–500
-    m_vx = ((rand() % 2 == 0) ? -1.f : 1.f) * base;        // left or right
-    m_vy = base;                                           // upward
+    m_vx = 100.f + static_cast<float>(rand() % 401);
+    if (rand() % 2) m_vx *= -1.f;
+    m_vy = 100.f + static_cast<float>(rand() % 401);
 
-    
     m_color1 = Color::White;
     m_color2 = Color(static_cast<Uint8>(rand() % 256),
                      static_cast<Uint8>(rand() % 256),
                      static_cast<Uint8>(rand() % 256));
 
-  
-    double theta   = (rand() / (double)RAND_MAX) * 2.0 * M_PI;
-    double dTheta  = 2.0 * M_PI / (numPoints - 1);
+    double theta  = (static_cast<double>(rand()) / RAND_MAX) * (M_PI / 2.0);
+    double dTheta = 2.0 * M_PI / (numPoints - 1);
 
     for (int j = 0; j < numPoints; ++j)
     {
-       
-        double radius = 10.0 + (rand() / (double)RAND_MAX) * 30.0;
+        double radius = 20.0 + (static_cast<double>(rand()) / RAND_MAX) * 60.0;
+        double dx = radius * cos(theta);
+        double dy = radius * sin(theta);
 
-        double x = m_centerCoordinate.x + static_cast<float>(radius * cos(theta));
-        double y = m_centerCoordinate.y + static_cast<float>(radius * sin(theta));
-
-        m_A(0, j) = x;
-        m_A(1, j) = y;
+        m_A(0, j) = m_centerCoordinate.x + static_cast<float>(dx);
+        m_A(1, j) = m_centerCoordinate.y + static_cast<float>(dy);
 
         theta += dTheta;
     }
@@ -65,18 +55,19 @@ Particle::Particle(RenderTarget& target,
 
 void Particle::draw(RenderTarget& target, RenderStates states) const
 {
-   
+    VertexArray fan(TrianglesFan, m_numPoints + 1);
+
     Vector2i centerPix =
         target.mapCoordsToPixel(m_centerCoordinate, m_cartesianPlane);
     fan[0].position = Vector2f(static_cast<float>(centerPix.x),
                                static_cast<float>(centerPix.y));
     fan[0].color = m_color1;
 
-   
     for (int j = 0; j < m_numPoints; ++j)
     {
         Vector2f cartPoint(static_cast<float>(m_A(0, j)),
                            static_cast<float>(m_A(1, j)));
+
         Vector2i pix =
             target.mapCoordsToPixel(cartPoint, m_cartesianPlane);
 
@@ -90,66 +81,50 @@ void Particle::draw(RenderTarget& target, RenderStates states) const
 
 void Particle::update(float dt)
 {
-   
     m_ttl -= dt;
 
-   
     rotate(dt * m_radiansPerSec);
 
-   
     scale(SCALE);
 
-   
     float dx = m_vx * dt;
 
-   
     m_vy -= G * dt;
     float dy = m_vy * dt;
 
-    
     translate(dx, dy);
 }
 
 void Particle::rotate(double theta)
 {
-    
     Vector2f temp = m_centerCoordinate;
     translate(-m_centerCoordinate.x, -m_centerCoordinate.y);
 
-    
     RotationMatrix R(theta);
     m_A = R * m_A;
 
-   
     translate(temp.x, temp.y);
 }
 
 void Particle::scale(double c)
 {
-   
     Vector2f temp = m_centerCoordinate;
     translate(-m_centerCoordinate.x, -m_centerCoordinate.y);
 
-   
     ScalingMatrix S(c);
     m_A = S * m_A;
 
-    
     translate(temp.x, temp.y);
 }
 
 void Particle::translate(double xShift, double yShift)
 {
-   
     TranslationMatrix T(xShift, yShift, m_A.getCols());
     m_A = T + m_A;
 
-    
     m_centerCoordinate.x += static_cast<float>(xShift);
     m_centerCoordinate.y += static_cast<float>(yShift);
 }
-
-
 
 bool Particle::almostEqual(double a, double b, double eps)
 {
