@@ -5,6 +5,31 @@
 
 using namespace std;
 
+static Color fromHSV(float h, float s, float v, Uint8 a = 255)
+{
+    while (h < 0.f)   h += 360.f;
+    while (h >= 360.f) h -= 360.f;
+
+    float c = v * s;
+    float x = c * (1.f - fabsf(fmodf(h / 60.f, 2.f) - 1.f));
+    float m = v - c;
+
+    float r = 0.f, g = 0.f, b = 0.f;
+
+    if (h < 60.f)       { r = c; g = x; b = 0.f; }
+    else if (h < 120.f) { r = x; g = c; b = 0.f; }
+    else if (h < 180.f) { r = 0.f; g = c; b = x; }
+    else if (h < 240.f) { r = 0.f; g = x; b = c; }
+    else if (h < 300.f) { r = x; g = 0.f; b = c; }
+    else                { r = c; g = 0.f; b = x; }
+
+    Uint8 R = static_cast<Uint8>((r + m) * 255.f);
+    Uint8 G = static_cast<Uint8>((g + m) * 255.f);
+    Uint8 B = static_cast<Uint8>((b + m) * 255.f);
+
+    return Color(R, G, B, a);
+}
+
 Particle::Particle(RenderTarget& target,
                    int numPoints,
                    Vector2i mouseClickPosition)
@@ -13,11 +38,10 @@ Particle::Particle(RenderTarget& target,
       m_radiansPerSec(0.0f),
       m_vx(0.0f),
       m_vy(0.0f),
-      m_hue(0.0f),
-      m_drawPhase(0.0f),
       m_color1(Color::White),
-      m_color2(Color::Red),
-      m_A(2, numPoints)
+      m_A(2, numPoints),
+      m_groundY(0.0f),
+      m_vertexColors(numPoints)
 {
     Vector2u winSize = target.getSize();
     m_cartesianPlane.setCenter(0.f, 0.f);
@@ -27,57 +51,89 @@ Particle::Particle(RenderTarget& target,
     m_centerCoordinate =
         target.mapPixelToCoords(mouseClickPosition, m_cartesianPlane);
 
-    
+    Vector2i bottomPixel(0, static_cast<int>(winSize.y));
+    Vector2f bottomCoord =
+        target.mapPixelToCoords(bottomPixel, m_cartesianPlane);
+    m_groundY = bottomCoord.y;
+
     float frac = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-    float sign = (rand() % 2 == 0) ? 1.f : -1.f;
-    m_radiansPerSec = sign * frac * static_cast<float>(M_PI);
+    m_radiansPerSec = frac * static_cast<float>(M_PI);
 
-    
-    m_vx = 150.f + static_cast<float>(rand() % 351); 
+    m_vx = 100.f + static_cast<float>(rand() % 401);
     if (rand() % 2) m_vx *= -1.f;
-    m_vy = 150.f + static_cast<float>(rand() % 351); 
 
-    
-    m_color1 = Color::White;
-    m_hue    = static_cast<float>(rand() % 360);
-    m_color2 = hsvToRgb(m_hue, 1.0f, 1.0f);
-    m_drawPhase = static_cast<float>(rand() % 360);
+    m_vy = 100.f + static_cast<float>(rand() % 401);
 
-    
-    m_trail.clear();
-    m_trail.push_back(m_centerCoordinate);
+    float baseHue = static_cast<float>(rand() % 360);
 
-    
-    double theta  = (static_cast<double>(rand()) / RAND_MAX) * (M_PI / 2.0);
-    double dTheta = 2.0 * M_PI / (numPoints - 1);
+    double theta  = (static_cast<double>(rand()) / RAND_MAX) * 2.0 * M_PI;
+    double dTheta = 2.0 * M_PI / (numPoints);
 
     for (int j = 0; j < numPoints; ++j)
     {
-        double baseRadius = 20.0 + (static_cast<double>(rand()) / RAND_MAX) * 40.0;
-        if (j % 2 == 0)
-            baseRadius *= 1.6;  
+        double baseRads = 35.0 + (static_cast<double>(rand()) / RAND_MAX) * 30.0;
+        double radius;
 
-        double dx = baseRadius * cos(theta);
-        double dy = baseRadius * sin(theta);
+        if (j % 3 == 0)
+            radius = baseRads * 2.0;
+        else if (j % 3 == 1)
+            radius = baseRads * 1.2;
+        else
+            radius = baseRads * 0.6;
+
+        double dx = radius * cos(theta);
+        double dy = radius * sin(theta);
 
         m_A(0, j) = m_centerCoordinate.x + static_cast<float>(dx);
         m_A(1, j) = m_centerCoordinate.y + static_cast<float>(dy);
 
+        float t = static_cast<float>(j) / static_cast<float>(numPoints);
+        float hue = baseHue + 80.f * t;
+        Color c = fromHSV(hue, 0.95f, 1.0f, 240);
+
+        m_vertexColors[j] = c;
+
         theta += dTheta;
     }
+
+    m_color1 = Color(255, 255, 255);
 }
 
 void Particle::draw(RenderTarget& target, RenderStates states) const
 {
-    
-    VertexArray base(TrianglesFan, m_numPoints + 1);
+    VertexArray glowFan(TrianglesFan, m_numPoints + 1);
 
+    Vector2f centerCart = m_centerCoordinate;
     Vector2i centerPix =
-        target.mapCoordsToPixel(m_centerCoordinate, m_cartesianPlane);
-    float cx = static_cast<float>(centerPix.x);
-    float cy = static_cast<float>(centerPix.y);
+        target.mapCoordsToPixel(centerCart, m_cartesianPlane);
 
-    base[0].position = Vector2f(cx, cy);
+    glowFan[0].position = Vector2f(static_cast<float>(centerPix.x),
+                                   static_cast<float>(centerPix.y));
+    glowFan[0].color = Color(255, 255, 255, 50);
+
+    for (int j = 0; j < m_numPoints; ++j)
+    {
+        Vector2f cartPoint(static_cast<float>(m_A(0, j)),
+                           static_cast<float>(m_A(1, j)));
+
+        Vector2f dir = cartPoint - centerCart;
+        Vector2f glowCart = centerCart + dir * 1.4f;
+
+        Vector2i glowPix =
+            target.mapCoordsToPixel(glowCart, m_cartesianPlane);
+
+        Color c = m_vertexColors[j];
+        glowFan[j + 1].position =
+            Vector2f(static_cast<float>(glowPix.x),
+                     static_cast<float>(glowPix.y));
+        glowFan[j + 1].color = Color(c.r, c.g, c.b, 80);
+    }
+
+    VertexArray fan(TrianglesFan, m_numPoints + 1);
+
+    fan[0].position = Vector2f(static_cast<float>(centerPix.x),
+                               static_cast<float>(centerPix.y));
+    fan[0].color = m_color1;
 
     for (int j = 0; j < m_numPoints; ++j)
     {
@@ -86,105 +142,50 @@ void Particle::draw(RenderTarget& target, RenderStates states) const
         Vector2i pix =
             target.mapCoordsToPixel(cartPoint, m_cartesianPlane);
 
-        base[j + 1].position =
+        fan[j + 1].position =
             Vector2f(static_cast<float>(pix.x), static_cast<float>(pix.y));
+        fan[j + 1].color = m_vertexColors[j];
     }
 
-    
-    Color outerColor = hsvToRgb(m_hue, 1.0f, 1.0f);
-    Color midColor   = hsvToRgb(fmod(m_hue + 120.0f, 360.0f), 1.0f, 1.0f);
-    Color innerColor = hsvToRgb(fmod(m_hue + 240.0f, 360.0f), 0.7f, 1.0f);
-
-    
-    VertexArray outer = base;
-    for (std::size_t i = 0; i < outer.getVertexCount(); ++i)
-        outer[i].color = outerColor;
-
-    RenderStates rsOuter(states);
-    rsOuter.transform.rotate(m_drawPhase * 0.5f, cx, cy);
-    rsOuter.transform.scale(1.5f, 1.5f, cx, cy);
-    target.draw(outer, rsOuter);
-
-   
-    VertexArray mid = base;
-    for (std::size_t i = 0; i < mid.getVertexCount(); ++i)
-        mid[i].color = midColor;
-
-    RenderStates rsMid(states);
-    rsMid.transform.rotate(-m_drawPhase, cx, cy);
-    rsMid.transform.scale(1.1f, 1.1f, cx, cy);
-    target.draw(mid, rsMid);
-
-    
-    VertexArray inner = base;
-    for (std::size_t i = 0; i < inner.getVertexCount(); ++i)
-        inner[i].color = innerColor;
-
-    RenderStates rsInner(states);
-    rsInner.transform.rotate(m_drawPhase * 1.5f, cx, cy);
-    rsInner.transform.scale(0.7f, 0.7f, cx, cy);
-    target.draw(inner, rsInner);
-
-    
-    if (!m_trail.empty())
+    VertexArray outline(LinesStrip, m_numPoints + 1);
+    for (int j = 0; j < m_numPoints; ++j)
     {
-        VertexArray trail(LineStrip, m_trail.size());
-        Color trailBase = hsvToRgb(m_hue, 1.0f, 1.0f);
+        Vector2f cartPoint(static_cast<float>(m_A(0, j)),
+                           static_cast<float>(m_A(1, j)));
+        Vector2i pix =
+            target.mapCoordsToPixel(cartPoint, m_cartesianPlane);
 
-        for (std::size_t i = 0; i < m_trail.size(); ++i)
-        {
-            float t = (m_trail.size() == 1) ? 1.0f
-                                            : static_cast<float>(i) / (m_trail.size() - 1);
-
-            Vector2i tpix =
-                target.mapCoordsToPixel(m_trail[i], m_cartesianPlane);
-
-            trail[i].position =
-                Vector2f(static_cast<float>(tpix.x), static_cast<float>(tpix.y));
-
-            Color c = trailBase;
-            c.a = static_cast<Uint8>(40 + 180.f * t); // fade head–>tail
-            trail[i].color = c;
-        }
-
-        target.draw(trail, states);
+        outline[j].position =
+            Vector2f(static_cast<float>(pix.x), static_cast<float>(pix.y));
+        outline[j].color = Color(255, 255, 255, 230);
     }
+    outline[m_numPoints] = outline[0];
+
+    target.draw(glowFan, states);
+    target.draw(fan, states);
+    target.draw(outline, states);
 }
 
 void Particle::update(float dt)
 {
-    
     m_ttl -= dt;
 
-    
     rotate(dt * m_radiansPerSec);
 
-   
     scale(SCALE);
 
-   
-    m_drawPhase += 90.0f * dt;
-    if (m_drawPhase > 360.0f)
-        m_drawPhase -= 360.0f;
-
-  
-    m_hue += 120.0f * dt;
-    if (m_hue >= 360.0f)
-        m_hue -= 360.0f;
-    m_color2 = hsvToRgb(m_hue, 1.0f, 1.0f);
-
-  
-    m_trail.push_back(m_centerCoordinate);
-    const std::size_t MAX_TRAIL = 25;
-    if (m_trail.size() > MAX_TRAIL)
-        m_trail.pop_front();
-
-   
-    m_vy -= G * dt;
     float dx = m_vx * dt;
+    m_vy -= G * dt;
     float dy = m_vy * dt;
-
     translate(dx, dy);
+
+    if (m_centerCoordinate.y < m_groundY)
+    {
+        float penetration = m_groundY - m_centerCoordinate.y;
+        translate(0.0, penetration);
+
+        m_vy = -m_vy * 0.6f;
+    }
 }
 
 void Particle::rotate(double theta)
@@ -371,34 +372,4 @@ void Particle::unitTests()
     }
 
     cout << "Score: " << score << " / 7" << endl;
-}
-
-Color Particle::hsvToRgb(float h, float s, float v)
-{
-    float c = v * s;
-    float hh = h / 60.0f;
-    float x = c * (1.0f - std::fabs(std::fmod(hh, 2.0f) - 1.0f));
-    float m = v - c;
-
-    float rPrime = 0.f, gPrime = 0.f, bPrime = 0.f;
-
-    if (0.0f <= h && h < 60.0f) {
-        rPrime = c; gPrime = x; bPrime = 0.f;
-    } else if (60.0f <= h && h < 120.0f) {
-        rPrime = x; gPrime = c; bPrime = 0.f;
-    } else if (120.0f <= h && h < 180.0f) {
-        rPrime = 0.f; gPrime = c; bPrime = x;
-    } else if (180.0f <= h && h < 240.0f) {
-        rPrime = 0.f; gPrime = x; bPrime = c;
-    } else if (240.0f <= h && h < 300.0f) {
-        rPrime = x; gPrime = 0.f; bPrime = c;
-    } else {
-        rPrime = c; gPrime = 0.f; bPrime = x;
-    }
-
-    Uint8 r = static_cast<Uint8>((rPrime + m) * 255.0f);
-    Uint8 g = static_cast<Uint8>((gPrime + m) * 255.0f);
-    Uint8 b = static_cast<Uint8>((bPrime + m) * 255.0f);
-
-    return Color(r, g, b);
 }

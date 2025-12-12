@@ -3,7 +3,7 @@
 #include "Matrices.h"
 #include <SFML/Graphics.hpp>
 #include <cmath>
-#include <deque>
+#include <vector>
 
 const float G     = 1000.0f;
 const float TTL   = 5.0f;
@@ -33,19 +33,13 @@ private:
     float    m_radiansPerSec;
     float    m_vx;
     float    m_vy;
-    float    m_hue;        
-    float    m_drawPhase;  
     View     m_cartesianPlane;
     Color    m_color1;
-    Color    m_color2;
     Matrix   m_A;
-
-  
-    std::deque<Vector2f> m_trail;
+    float    m_groundY;
+    std::vector<Color> m_vertexColors;
 
     void rotate(double theta);
     void scale(double c);
     void translate(double xShift, double yShift);
-
-    static Color hsvToRgb(float h, float s, float v);
 };

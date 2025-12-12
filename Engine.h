@@ -10,12 +10,8 @@ using namespace std;
 class Engine
 {
 private:
-    RenderWindow       m_Window;
-    vector<Particle>   m_particles;
-
-    
-    Color m_bgColor;
-    float m_bgPhase;
+    RenderWindow m_Window;
+    vector<Particle> m_particles;
 
     void input();
     void update(float dtAsSeconds);
