@@ -13,6 +13,7 @@ private:
     RenderWindow m_Window;
     vector<Particle> m_particles;
 
+    float m_bgTime = 0.0f; 
     void input();
     void update(float dtAsSeconds);
     void draw();
