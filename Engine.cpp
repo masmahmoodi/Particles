@@ -115,13 +115,11 @@ void Engine::update(float dtAsSeconds)
 }
 void Engine::draw()
 {
-   
+    float t = m_bgTime;
 
-   
     float hueTop    = fmodf(t * 35.f, 360.f);
     float hueBottom = fmodf(hueTop + 140.f, 360.f);
 
-    
     sf::Color top    = fromHSV(hueTop,    0.55f, 0.22f, 255);
     sf::Color bottom = fromHSV(hueBottom, 0.60f, 0.10f, 255);
 
